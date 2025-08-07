@@ -174,7 +174,6 @@ CREATE TABLE Products (
     ModifiedDate DATETIME2 DEFAULT GETDATE(),
     FOREIGN KEY (TenantId) REFERENCES Tenants(TenantId)
 );
-
 -- =====================================================
 -- JOB AND TRANSACTION MANAGEMENT
 -- =====================================================
@@ -213,10 +212,14 @@ CREATE TABLE WeighingTransactions (
     CustomerId UNIQUEIDENTIFIER NOT NULL,
     ProductId UNIQUEIDENTIFIER NOT NULL,
     
-    -- Weight measurements (calculated from deck weights)
-    GrossWeight DECIMAL(10,2) DEFAULT 0,
+    -- Weight measurements
+    Deck1Weight DECIMAL(10,2) DEFAULT 0,
+    Deck2Weight DECIMAL(10,2) DEFAULT 0,
+    Deck3Weight DECIMAL(10,2) DEFAULT 0,
+    Deck4Weight DECIMAL(10,2) DEFAULT 0,
+    GrossWeight AS (Deck1Weight + Deck2Weight + Deck3Weight + Deck4Weight),
     TareWeight DECIMAL(10,2),
-    NetWeight AS (GrossWeight - ISNULL(TareWeight, 0)),
+    NetWeight AS (Deck1Weight + Deck2Weight + Deck3Weight + Deck4Weight - ISNULL(TareWeight, 0)),
     
     -- Status and validation
     IsOverloaded BIT DEFAULT 0,
@@ -243,20 +246,6 @@ CREATE TABLE WeighingTransactions (
     FOREIGN KEY (ProductId) REFERENCES Products(ProductId),
     FOREIGN KEY (SourceSiteId) REFERENCES Sites(SiteId),
     FOREIGN KEY (DestinationSiteId) REFERENCES Sites(SiteId)
-);
-
--- Deck Weights Table (Dynamic deck support)
-CREATE TABLE DeckWeights (
-    DeckWeightId UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    TransactionId UNIQUEIDENTIFIER NOT NULL,
-    DeckNumber INT NOT NULL, -- 1, 2, 3, 4, etc.
-    Weight DECIMAL(10,2) NOT NULL DEFAULT 0,
-    AxleType NVARCHAR(50), -- 'Steer', 'Drive', 'Trailer', etc.
-    MaxAllowedWeight DECIMAL(10,2), -- From vehicle configuration
-    IsOverloaded BIT DEFAULT 0,
-    CreatedDate DATETIME2 DEFAULT GETDATE(),
-    FOREIGN KEY (TransactionId) REFERENCES WeighingTransactions(TransactionId) ON DELETE CASCADE,
-    UNIQUE(TransactionId, DeckNumber)
 );
 
 -- Overload Records Table (For tracking overloaded transactions)
@@ -333,4 +322,35 @@ CREATE TABLE AuditLogs (
     ActionDateTime DATETIME2 DEFAULT GETDATE(),
     FOREIGN KEY (UserId) REFERENCES Users(UserId),
     FOREIGN KEY (TenantId) REFERENCES Tenants(TenantId)
+);
+
+-- =====================================================
+-- SEQUENCE TABLES FOR OFFLINE SUPPORT
+-- =====================================================
+
+-- Sequence Numbers Table (For generating unique docket numbers offline)
+CREATE TABLE SequenceNumbers (
+    SequenceId UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    SiteId UNIQUEIDENTIFIER NOT NULL,
+    WeighbridgeId UNIQUEIDENTIFIER NOT NULL,
+    LastSequenceNumber BIGINT DEFAULT 0,
+    LastUpdated DATETIME2 DEFAULT GETDATE(),
+    FOREIGN KEY (SiteId) REFERENCES Sites(SiteId),
+    FOREIGN KEY (WeighbridgeId) REFERENCES Weighbridges(WeighbridgeId),
+    UNIQUE(SiteId, WeighbridgeId)
+);
+
+-- Sync Status Table (Track synchronization between local and cloud)
+CREATE TABLE SyncStatus (
+    SyncId UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    SiteId UNIQUEIDENTIFIER NOT NULL,
+    WeighbridgeId UNIQUEIDENTIFIER NOT NULL,
+    LastSyncDateTime DATETIME2,
+    PendingRecords INT DEFAULT 0,
+    SyncStatus NVARCHAR(20) DEFAULT 'Pending', -- Pending, InProgress, Completed, Failed
+    ErrorMessage NVARCHAR(500),
+    CreatedDate DATETIME2 DEFAULT GETDATE(),
+    ModifiedDate DATETIME2 DEFAULT GETDATE(),
+    FOREIGN KEY (SiteId) REFERENCES Sites(SiteId),
+    FOREIGN KEY (WeighbridgeId) REFERENCES Weighbridges(WeighbridgeId)
 );
