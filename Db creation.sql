@@ -200,7 +200,8 @@ CREATE TABLE Jobs (
     FOREIGN KEY (VehicleId) REFERENCES Vehicles(VehicleId),
     FOREIGN KEY (CustomerId) REFERENCES Customers(CustomerId)
 );
-
+--Since the number of deck weights can vary and your current schema has fixed columns (Deck1Weight, Deck2Weight, etc.), 
+--you should normalize deck data into a separate table for dynamic handling
 -- Weighing Transactions Table (Main weighing records)
 CREATE TABLE WeighingTransactions (
     TransactionId UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
@@ -211,33 +212,21 @@ CREATE TABLE WeighingTransactions (
     DriverId UNIQUEIDENTIFIER NOT NULL,
     CustomerId UNIQUEIDENTIFIER NOT NULL,
     ProductId UNIQUEIDENTIFIER NOT NULL,
-    
-    -- Weight measurements
-    Deck1Weight DECIMAL(10,2) DEFAULT 0,
-    Deck2Weight DECIMAL(10,2) DEFAULT 0,
-    Deck3Weight DECIMAL(10,2) DEFAULT 0,
-    Deck4Weight DECIMAL(10,2) DEFAULT 0,
-    GrossWeight AS (Deck1Weight + Deck2Weight + Deck3Weight + Deck4Weight),
+
     TareWeight DECIMAL(10,2),
-    NetWeight AS (Deck1Weight + Deck2Weight + Deck3Weight + Deck4Weight - ISNULL(TareWeight, 0)),
-    
-    -- Status and validation
     IsOverloaded BIT DEFAULT 0,
     DocketIssued BIT DEFAULT 0,
-    
-    -- Location information
+
     SourceSiteId UNIQUEIDENTIFIER,
     DestinationSiteId UNIQUEIDENTIFIER,
-    
-    -- Timestamps
+
     WeighingDateTime DATETIME2 DEFAULT GETDATE(),
     CreatedDate DATETIME2 DEFAULT GETDATE(),
     ModifiedDate DATETIME2 DEFAULT GETDATE(),
-    
-    -- Offline sync support
+
     IsSynced BIT DEFAULT 0,
-    LocalTransactionId NVARCHAR(50), -- For offline transactions
-    
+    LocalTransactionId NVARCHAR(50),
+
     FOREIGN KEY (JobId) REFERENCES Jobs(JobId),
     FOREIGN KEY (WeighbridgeId) REFERENCES Weighbridges(WeighbridgeId),
     FOREIGN KEY (VehicleId) REFERENCES Vehicles(VehicleId),
@@ -247,6 +236,15 @@ CREATE TABLE WeighingTransactions (
     FOREIGN KEY (SourceSiteId) REFERENCES Sites(SiteId),
     FOREIGN KEY (DestinationSiteId) REFERENCES Sites(SiteId)
 );
+CREATE TABLE DeckWeights (
+    DeckWeightId UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    TransactionId UNIQUEIDENTIFIER NOT NULL,
+    DeckNo INT NOT NULL,
+    Weight DECIMAL(10,2) NOT NULL,
+
+    FOREIGN KEY (TransactionId) REFERENCES WeighingTransactions(TransactionId)
+);
+
 
 -- Overload Records Table (For tracking overloaded transactions)
 CREATE TABLE OverloadRecords (
